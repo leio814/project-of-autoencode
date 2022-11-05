@@ -1,0 +1,82 @@
+import random
+# Generate 4 random bits with equal probabilities
+import numpy as np
+import math
+import pandas as pd
+
+
+def GenerRanForBit():
+     arrs = []
+     for time in range(4):
+        transBit = random.getrandbits(1)
+        arrs.append(transBit)
+     return arrs
+
+def EncodeHam(m):
+    G = np.array([[1,0,0,0,1,0,1],
+                  [0,1,0,0,1,1,1],
+                  [0,0,1,0,1,1,0],
+                  [0,0,0,1,0,1,1]])
+    c = np.dot(m,G)
+    i = 0
+    for factor in c:
+        c[i] = factor % 2
+        i = i + 1
+    return c
+
+
+def SigMap(c):
+    s =[]
+    for a in c:
+        s.append(1-2*a)
+    return s
+
+def GaussianNiose (u):
+    n = []
+    for time in range(7):
+        n.append(random.gauss(0,math.sqrt(u)))
+
+    return n
+
+#transmit the signal
+def RecSig(s,n):
+    ec = 1.0
+    a = math.sqrt(ec)
+    r = np.dot(a,s) + n
+    return r
+
+def DataSet(receive,b):
+    hammingCode = EncodeHam(receive)
+    send = SigMap(hammingCode)
+    input = RecSig(send,GaussianNiose (b))
+    return receive, input
+
+def to_csv(times, sigma):
+    four_list = []
+    seven_list = []
+    for n in range(times):
+        b4, b7 = DataSet(GenerRanForBit(), sigma)
+        four_list.append(b4)
+        seven_list.append(b7)
+
+    four_df = pd.DataFrame(np.array(four_list),  columns=['r1', 'r2', 'r3', 'r4'])
+    seven_df = pd.DataFrame(np.array(seven_list), columns=['i1', 'i2', 'i3', 'i4', 'i5', 'i6', 'i7'])
+    four_df.to_csv('four.csv')
+    seven_df.to_csv('seven.csv')
+
+def get_dataframes(times, sigma):
+    four_list = []
+    seven_list = []
+    for n in range(times):
+        b4, b7 = DataSet(GenerRanForBit(), sigma)
+        four_list.append(b4)
+        seven_list.append(b7)
+
+    four_df = pd.DataFrame(np.array(four_list),  columns=['r1', 'r2', 'r3', 'r4'])
+    seven_df = pd.DataFrame(np.array(seven_list), columns=['i1', 'i2', 'i3', 'i4', 'i5', 'i6', 'i7'])
+    return four_df, seven_df
+    
+def trans_q(dB):
+    en = math.pow(10, dB / 10) * (4/7)
+    q = 1 / (en*2)
+    return q
