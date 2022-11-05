@@ -1,0 +1,92 @@
+import numpy as np
+import tensorflow as tf
+from utilities.utils import trans_q, get_dataframes
+import seaborn as sns
+
+
+
+dataset = tf.eye(16) # One-hot encoded values
+y_train = dataset
+numbers = tf.math.argmax(dataset)
+numbers = tf.cast(numbers, tf.float32)
+x_inputs = tf.map_fn(lambda x: tf.constant(
+    tf.strings.to_number(
+        tf.strings.bytes_split(
+            np.binary_repr(tf.cast(x, tf.int32), 4)))),
+          numbers)
+# x_1 = list(zip(x_inputs.numpy(), numbers.numpy()))
+x_1 = x_inputs
+numbers = numbers.numpy()
+x_inputs = tf.repeat(x_inputs, 10, axis=0)
+y_train = tf.repeat(y_train, 10, axis=0)
+
+
+
+
+class MyModel(tf.keras.Model):
+    def __init__(self, sigma):
+        super().__init__()
+        # Definition of layers
+        self.sigma = sigma
+        # self.input_layer = tf.keras.layers.Input(shape=(4))
+        self.dense_encoder_1 = tf.keras.layers.Dense(4, input_shape=(4,), activation=tf.nn.sigmoid)
+        self.dense_encode_2 = tf.keras.layers.Dense(7)
+        self.dense_decode_1 = tf.keras.layers.Dense(7, activation=tf.nn.sigmoid)
+        self.output_layer = tf.keras.layers.Dense(16, activation=tf.nn.softmax)
+        
+    def call(self, inputs):
+        x = self.dense_encoder_1(inputs)
+        x = self.dense_encode_2(x)
+        
+        # Normalization layer
+        normalization_factor = tf.math.reciprocal(tf.math.sqrt(tf.math.reduce_sum(tf.math.square(x), 1))) * np.sqrt(7)
+        x = tf.math.multiply(tf.tile(tf.expand_dims(normalization_factor, 1), [1, 7]), x)
+        
+        # Noise layer
+        #noise_std_dev = tf.compat.v1.placeholder(tf.float32)
+        channel = tf.random.normal(tf.shape(x), stddev=self.sigma)
+        x = tf.math.add(x, channel)
+        
+        # Dense decoder layer
+        x = self.dense_decode_1(x)
+        x = self.output_layer(x)
+        return x   
+        
+        
+        
+tf.keras.backend.clear_session()
+model = MyModel(sigma=trans_q(6))
+model.build((None, 4))
+model.summary()
+
+model.compile(optimizer=tf.keras.optimizers.Adam(),
+             loss=tf.keras.losses.CategoricalCrossentropy(),
+             metrics=[tf.keras.metrics.CategoricalCrossentropy(),])
+
+history = model.fit(x_inputs, y_train,
+                    batch_size=64,
+                    epochs=3000)
+                    
+                    
+
+sns.lineplot(data = history.history['loss'])
+
+
+error_count = 0
+total_count = 0
+while error_count < 100:
+    predictions = model.predict(x_1)
+    predictions = tf.math.argmax(predictions)
+    predictions = predictions.numpy()
+    
+    for n, prediction in enumerate(predictions):
+        total_count += 1
+        if round(prediction) != round(numbers[n]):
+            error_count += 1
+            print(f'Error count = {error_count}')
+    
+error_rate = error_count / total_count
+print(f'Error rate = {error_rate}')
+
+
+        
